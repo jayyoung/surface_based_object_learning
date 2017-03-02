@@ -20,7 +20,7 @@ if __name__ == '__main__':
     rospy.init_node('om_test', anonymous = False)
 
     bridge = CvBridge()
-
+    print("beginning")
     soma_query_service = rospy.ServiceProxy('/soma/query_objects',SOMAQueryObjs)
     segment_query_service = rospy.ServiceProxy('/soma_llsd/get_segment',GetSegment)
     query = SOMAQueryObjsRequest()
@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     bridge = CvBridge()
 
-
+    print("processing objects")
     for k in response.objects:
         print("getting: " + k.id)
         object_target_dir = "object_dump/"+k.id+"/"

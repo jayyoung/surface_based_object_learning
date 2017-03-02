@@ -15,6 +15,7 @@ if __name__ == '__main__':
     rospy.init_node('om_test', anonymous = False)
 
     bridge = CvBridge()
+    print("trying to connect to database")
     store = MessageStoreProxy(database="somadata", collection="llsd_scene_store")
     scenes = store.query(Scene._type)
     targ = "scene_dump/"
