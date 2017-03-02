@@ -301,22 +301,22 @@ class LearningCore:
 
                 observations = segment.response.observations
                 rospy.loginfo("LEARNING CORE: observations for " + str(object_id) + " = " + str(len(observations)))
-                if(len(observations) >= 2):
-                    rospy.loginfo("LEARNING CORE: processing...")
+            #    if(len(observations) >= 2):
+           #         rospy.loginfo("LEARNING CORE: processing...")
                     # update world model
-                    try:
-                        rospy.loginfo("LEARNING CORE: updating world model")
-                        merged_cloud = self.view_alignment_manager.register_views(segment.response.observations)
-                        rospy.loginfo("LEARNING CORE: updating SOMA obj")
-                        soma_object.objects[0].cloud = merged_cloud
+          #          try:
+         #               rospy.loginfo("LEARNING CORE: updating world model")
+        #                merged_cloud = self.view_alignment_manager.register_views(segment.response.observations)
+       #                 rospy.loginfo("LEARNING CORE: updating SOMA obj")
+      #                  soma_object.objects[0].cloud = merged_cloud
 
-                        self.soma_update(object=soma_object.objects[0],db_id=str(object_id))
-                    except Exception,e:
-                        rospy.logerr("problem updating object models in world/SOMA db. Unable to register merged clouds")
-                        rospy.logerr(e)
-                        continue
-                else:
-                    rospy.loginfo("LEARNING CORE: not running view alignment, only one view")
+     #                   self.soma_update(object=soma_object.objects[0],db_id=str(object_id))
+    #                except Exception,e:
+   #                     rospy.logerr("problem updating object models in world/SOMA db. Unable to register merged clouds")
+  #                      rospy.logerr(e)
+ #                       continue
+#                else:
+ #                   rospy.loginfo("LEARNING CORE: not running view alignment, only one view")
 
                 #rospy.loginfo("LEARNING CORE: attempting to update object's recognition label")
                 #try:
