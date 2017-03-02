@@ -25,13 +25,13 @@ def look_at_table():
     ptuClient.wait_for_server()
 
     goal = scitos_ptu.msg.PtuGotoGoal()
-    goal.tilt = 1 # 30 seems best
-    goal.tilt_vel = 1
+    goal.tilt = 15 # 30 seems best
+    goal.tilt_vel = 30
     ptuClient.send_goal(goal)
     ptuClient.wait_for_result()
 
 if __name__ == '__main__':
     rospy.init_node('nudge_ptu', anonymous = True)
-    #reset_gaze()
-    look_at_table()
+    reset_gaze()
+#    look_at_table()
 #    rospy.spin()
