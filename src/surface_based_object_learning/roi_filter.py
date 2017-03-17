@@ -68,7 +68,7 @@ class ROIFilter:
         #rospy.loginfo("ROI TYPES: ")
         for roi in response.rois:
 		#rospy.loginfo(roi)
-            if(roi.id not in visited_ids and "activity" not in roi.config and "lab" not in roi.type):
+            if(roi.id not in visited_ids and "activity" not in roi.config and "Common" in roi.type):
                 visited_ids.append(roi.id)
                 rospy.loginfo(roi.type)
                 rospy.loginfo(roi.config)
