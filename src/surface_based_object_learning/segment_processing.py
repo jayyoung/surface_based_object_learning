@@ -497,7 +497,7 @@ class SegmentedScene:
 
             cur_segment.image_mask = bridge.cv2_to_imgmsg(image_mask)
 
-            cv2.imwrite(str(uuid.uuid4())+'_mask.png',image_mask)
+            #cv2.imwrite(str(uuid.uuid4())+'_mask.png',image_mask)
 
 
 
@@ -597,16 +597,27 @@ class SegmentProcessor:
         self.prev_scene = None
         self.root_scene = None
 
-    def segment_scene(self,input_cloud,robot_pos=None):
+    def segment_scene(self,input_cloud,robot_pos=None,tf=None):
+        rospy.wait_for_service('/get_closest_roi_to_robot',10)
+        roicl = rospy.ServiceProxy('/get_closest_roi_to_robot',GetROIClosestToRobot)
+        rospy.loginfo("asdasdas")
 
         if(robot_pos is None):
-            rospy.wait_for_service('/get_closest_roi_to_robot',10)
-            roicl = rospy.ServiceProxy('/get_closest_roi_to_robot',GetROIClosestToRobot)
+            rospy.loginfo("-- Getting Robot Position")
             rp = rospy.wait_for_message("/robot_pose",Pose,10)
-            roip = roicl(pose=rp.position)
-            robot_pos = roip.output
+        else:
+            rp = robot_pos
+            rospy.loginfo("Republishing TF data")
+            rospy.loginfo("going")
+            pub = rospy.Publisher('/tf', tf2_msgs.msg.TFMessage,queue_size=10)
+            rospy.loginfo("done setup, publishing")
+            pub.publish(tf)
+            rospy.loginfo("Done!")
 
 
+        roip = roicl(pose=rp.position)
+        robot_pos = roip.output
+        rospy.loginfo("Segmenting")
         output = self.segmentation_service(cloud=input_cloud,posearray=robot_pos)
         return output
 
@@ -617,9 +628,15 @@ class SegmentProcessor:
         rospy.loginfo("segmenting (may take a second)")
 
         robot_pos = None
+        tf = None
         if(offline_data is not None):
             robot_pos = offline_data['robot_pose']
-        segment_response = self.segment_scene(observation_data['scene_cloud'],robot_pos)
+            pose = geometry_msgs.msg.Pose()
+            pose.position = robot_pos
+            robot_pos = pose.position
+            rospy.loginfo("Using offline data, robot pos:"+str(pose.position.position))
+            tf = offline_data['tf']
+        segment_response = self.segment_scene(observation_data['scene_cloud'],robot_pos,tf)
         if(segment_response.clusters_indices is None):
             rospy.logerr("No indices in segmented point cloud. Quitting processing this view.")
 

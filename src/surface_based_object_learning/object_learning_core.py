@@ -12,7 +12,7 @@ import json
 # view store STUFF
 from mongodb_store.message_store import MessageStoreProxy
 from soma_llsd_msgs.msg import Segment,Observation,Scene
-
+from cv_bridge import CvBridge, CvBridgeError
 # ROS stuff
 from sensor_msgs.msg import PointCloud2, PointField
 from segment_processing import SegmentProcessor
@@ -23,7 +23,7 @@ from std_srvs.srv import Trigger, TriggerResponse
 from geometry_msgs.msg import Pose,Point,Quaternion
 import tf2_ros
 import tf, tf2_msgs.msg
-
+import os
 # WS stuff
 from surface_based_object_learning.srv import *
 from util import TransformationStore
@@ -41,13 +41,13 @@ import uuid
 
 class LearningCore:
 
-    def __init__(self,db_hostname,db_port):
+    def __init__(self,db_hostname,db_port,data_dump_dir,roi_tag):
         rospy.init_node('surface_based_object_learning', anonymous = False)
         self.setup_clean = False
         rospy.loginfo("LEARNING CORE: Manager Online")
         # make a segment tracker
         rospy.loginfo("LEARNING CORE: looking for camera info topic")
-
+        self.data_dump_dir = data_dump_dir
         self.segment_processor = SegmentProcessor()
         self.pending_obs = []
         self.cur_sequence_obj_ids = []
@@ -56,6 +56,7 @@ class LearningCore:
         self.queued_soma_objs = []
         self.cur_scene_list = []
         self.just_data_collection = False
+        self.cv_bridge = CvBridge()
 
         rospy.loginfo("LEARNING CORE: setting up services")
         process = rospy.Service('/surface_based_object_learning/process_scene',ProcessScene,self.process_scene_callback)
@@ -98,6 +99,7 @@ class LearningCore:
         self.append_obs_to_segment = rospy.ServiceProxy('/soma_llsd/add_observations_to_segment',AddObservationsToSegment)
 
         self.scene_publisher = rospy.Publisher('/surface_based_object_learning/scenes', std_msgs.msg.String, queue_size=10)
+        self.data_dump_publisher = rospy.Publisher('/surface_based_object_learning/data_dumps', std_msgs.msg.String, queue_size=10)
 
         self.clean_up_obs()
 
@@ -184,8 +186,42 @@ class LearningCore:
                 rospy.loginfo("LEARNING CORE: successfully added scene to view store")
                 self.cur_scene_id = scene.response.id
                 self.cur_scene_list.append(self.cur_scene_id)
+
+                rospy.loginfo("-- Writing Scene to HDD --")
+
+
+                if(self.just_data_collection):
+                    out_dir = self.data_dump_dir+"dynamic/episodes/"+self.cur_episode_id+"/"
+                else:
+                    out_dir = self.data_dump_dir+"surface/episodes/"+self.cur_episode_id+"/"
+
+                if(os.path.exists(os.path.expanduser(out_dir))):
+                    rospy.loginfo("\t Re-using episode dir")
+                else:
+                    rospy.loginfo("\t Creating episode dir")
+                    os.makedirs(os.path.expanduser(out_dir))
+
+                rospy.loginfo("\t Writing")
+                img = self.cv_bridge.imgmsg_to_cv2(self.cur_observation_data['rgb_image'])
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+                cv2.imwrite(os.path.expanduser(out_dir)+self.cur_scene_id+".png",img)
+                data_file = os.path.expanduser(out_dir)+"data.txt"
+                if(os.path.isfile(os.path.expanduser(data_file))):
+                    rospy.loginfo("\t Data already written")
+                else:
+                    rospy.loginfo("\t Writing data")
+                    with open(data_file,"a+") as f:
+                        f.write(str(self.cur_observation_data['waypoint'])+"\n")
+                        f.write(str(self.cur_observation_data['timestamp'])+"\n")
+                        f.write(str(self.cur_observation_data['metadata'])+"\n")
+
+
             else:
                 rospy.logerr("couldn't add scene to view store, this is catastrophic")
+
+
+
 
             return True
         except Exception,e:
@@ -301,6 +337,22 @@ class LearningCore:
 
                 observations = segment.response.observations
                 rospy.loginfo("LEARNING CORE: observations for " + str(object_id) + " = " + str(len(observations)))
+                for o in observations:
+                    out_dir = self.data_dump_dir+"surface/episodes/"+self.cur_episode_id+"/objects/"+object_id+"/"
+                    img = o.rgb_cropped
+
+                    if(os.path.exists(os.path.expanduser(out_dir))):
+                        rospy.loginfo("\t reusing obj dir")
+                    else:
+                        rospy.loginfo("\t Creating obj dir")
+                        os.makedirs(os.path.expanduser(out_dir))
+
+                    img = self.cv_bridge.imgmsg_to_cv2(img)
+                    rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    outfile = os.path.expanduser(out_dir)+str(observations.index(o))+".png"
+                    rospy.loginfo("logging to: " + str(outfile))
+                    cv2.imwrite(outfile,rgb_img)
+
             #    if(len(observations) >= 2):
            #         rospy.loginfo("LEARNING CORE: processing...")
                     # update world model
@@ -566,6 +618,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='world_state_manager.py')
     parser.add_argument("db_hostname", nargs=1, help='DB Hostname')
     parser.add_argument('db_port', nargs=1, help="DB Port")
+    parser.add_argument("rgb_dump_dir", nargs=1, help='RGB HDD save location')
+    parser.add_argument('surface_roi_tag', nargs=1, help="Tag for filtering SOMa ROIs")
 
     args = parser.parse_args(rospy.myargv(argv=sys.argv)[1:])
 
@@ -574,7 +628,9 @@ if __name__ == '__main__':
     else:
         hostname = str(vars(args)['db_hostname'][0])
         port = str(vars(args)['db_port'][0])
+        datadir = str(vars(args)['rgb_dump_dir'][0])
+        roitag = str(vars(args)['surface_roi_tag'][0])
 
         rospy.loginfo("LEARNING CORE: got db_hostname as: " + hostname + " got db_port as: " + port)
-        core = LearningCore(hostname,port)
+        core = LearningCore(hostname,port,datadir,roitag)
         core.begin_spinning()

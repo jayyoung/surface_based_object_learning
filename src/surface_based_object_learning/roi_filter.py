@@ -117,7 +117,7 @@ class ROIFilter:
         rospy.loginfo("executing robot roi req")
         self.gather_rois(filter_point)
         poly = self.soma_polygons[0]
-	rospy.loginfo("ROI closest to robot is: " + str(poly.soma_id))
+        rospy.loginfo("ROI closest to robot is: " + str(poly.soma_id))
         pa = geometry_msgs.msg.PoseArray()
         min_x = poly.bounds[0]
         min_y = poly.bounds[1]

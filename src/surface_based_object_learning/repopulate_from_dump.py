@@ -13,10 +13,11 @@ import pickle
 from object_learning_core import *
 
 if __name__ == '__main__':
-    we = LearningCore("localhost","62345")
+    we = LearningCore("localhost","62345","~/surface_based_object_learning_rgb_dump/","Common")
 
     for subdir, dirs, files in os.walk("scripts/scene_dump"):
         print("--episode--")
+        we.begin_obs(None)
         for k in files:
             print("\t"+k)
             loaded = pickle.load( open(subdir+"/"+k, "rb" ) )
@@ -29,5 +30,5 @@ if __name__ == '__main__':
             observation_structure['tf'] = loaded.transform
             observation_structure['depth_image'] = loaded.depth_img
             observation_structure['timestamp'] = loaded.timestamp
-
             we.process_scene(loaded.cloud,loaded.waypoint,observation_structure)
+        we.end_obs(None)
