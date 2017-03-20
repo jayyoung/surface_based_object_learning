@@ -72,7 +72,7 @@ class OctomapSimilarityTrackerStrategy(ClusterTrackingStrategy):
             for prev_seg in prev_scene.segment_list:
                 if(prev_seg.assigned is True):
                     continue
-                score = self.octo_similarity_service(cur_seg.segmented_pc_mapframe,prev_seg.segmented_pc_mapframe)
+                score = self.octo_similarity_service(cur_seg.segmented_pc_mapframe,prev_seg.segmented_pc_mapframe).degree_of_overlap
                 # could threshold this further?
                 rospy.loginfo("source: " + cur_seg.segment_id + " target: " + prev_seg.segment_id + " score:" + str(score))
                 if(score > best_score):
@@ -82,13 +82,14 @@ class OctomapSimilarityTrackerStrategy(ClusterTrackingStrategy):
             if(best_segment is None):
                 rospy.loginfo("Unable to find a segment that is appropriate for linking")
             else:
-                if(best_score < 0.25):
+                if(best_score > 0):
+                    best_segment.assigned = True
+                    cur_seg.assigned = True
+                    rospy.loginfo("\nbest cluster for " + cur_seg.segment_id + " found at cluster with id " + best_segment.segment_id + " and score " + str(best_score))
+                    cur_seg.segment_id = best_segment.segment_id
+                else:
                     rospy.loginfo("The best looking segment has overlap below the score threshold, so I won't link it")
                     continue
-                best_segment.assigned = True
-                cur_seg.assigned = True
-                rospy.loginfo("\nbest cluster for " + cur_seg.segment_id + " found at cluster with id " + best_segment.segment_id + " and score " + str(best_score))
-                cur_seg.segment_id = best_segment.segment_id
 
 
 
