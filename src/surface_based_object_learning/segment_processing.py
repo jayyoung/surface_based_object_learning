@@ -166,7 +166,7 @@ class SegmentedScene:
         self.scene_id = str(uuid.uuid4())
         self.clean_setup = False
         self.num_segments = len(indices)
-        self.surf_filter = cv2.SURF(1000)]
+        self.surf_filter = cv2.SURF(1000)
         self.transformation_store = tf.TransformerROS()
         for transform in observation_data['tf'].transforms:
             self.transformation_store.setTransform(transform)

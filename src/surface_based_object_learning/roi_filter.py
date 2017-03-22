@@ -101,9 +101,9 @@ class ROIFilter:
             p_d = 900000
             best_p = None
             for p in self.soma_polygons:
-                if(filter_point.within(p)):
-		    print("contains filter point, ignoring")
-                    continue
+                #if(filter_point.within(p)):
+                #    print("contains filter point, ignoring")
+                #    continue
                 ds = p.centroid.distance(filter_point)
                 if(ds < p_d):
                     p_d = ds
