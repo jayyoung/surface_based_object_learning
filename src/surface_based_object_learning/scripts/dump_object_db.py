@@ -16,7 +16,7 @@ import os
 import pickle
 import python_pcd
 import sys
-from object_interestingness_estimator.srv import *
+#from object_interestingness_estimator.srv import *
 import caffe
 import scipy.misc
 from PIL import Image
@@ -29,141 +29,6 @@ import datetime, time
 import sys
 import numpy as np
 import cv2
-
-
-"""
-This script handles the skimage exif problem.
-"""
-
-ORIENTATIONS = {   # used in apply_orientation
-    2: (Image.FLIP_LEFT_RIGHT,),
-    3: (Image.ROTATE_180,),
-    4: (Image.FLIP_TOP_BOTTOM,),
-    5: (Image.FLIP_LEFT_RIGHT, Image.ROTATE_90),
-    6: (Image.ROTATE_270,),
-    7: (Image.FLIP_LEFT_RIGHT, Image.ROTATE_270),
-    8: (Image.ROTATE_90,)
-}
-
-
-def open_oriented_im(im_path):
-    im = Image.open(im_path)
-    if hasattr(im, '_getexif'):
-        exif = im._getexif()
-        if exif is not None and 274 in exif:
-            orientation = exif[274]
-            im = apply_orientation(im, orientation)
-    img = np.asarray(im).astype(np.float32) / 255.
-    if img.ndim == 2:
-        img = img[:, :, np.newaxis]
-        img = np.tile(img, (1, 1, 3))
-    elif img.shape[2] == 4:
-        img = img[:, :, :3]
-    return img
-
-
-def apply_orientation(im, orientation):
-    if orientation in ORIENTATIONS:
-        for method in ORIENTATIONS[orientation]:
-            im = im.transpose(method)
-    return im
-
-class CNNWrapper():
-    REPO_DIRNAME = os.path.abspath('/home/jxy/aloof/vision_stuff/caffe')
-    default_args = {
-        'model_def_file': (
-            '{}/models/resnet/ResNet-152-deploy.prototxt'.format(REPO_DIRNAME)), #'{}/models/bvlc_reference_caffenet/deploy.prototxt'.format(REPO_DIRNAME)),
-        'pretrained_model_file': (
-            '{}/models/resnet/ResNet-152-model.caffemodel'.format(REPO_DIRNAME)), #'{}/models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel'.format(REPO_DIRNAME)),
-        'mean_file': (
-            '{}/models/resnet/mean.npy'.format(REPO_DIRNAME)),
-        'class_labels_file': (
-            '{}/data/ilsvrc12/synset_words.txt'.format(REPO_DIRNAME)),
-        'bet_file': (
-            '{}/data/ilsvrc12/imagenet.bet.pickle'.format(REPO_DIRNAME)),
-    }
-    for key, val in default_args.iteritems():
-        if not os.path.exists(val):
-            raise Exception(
-                "File for {} is missing. Should be at: {}".format(key, val))
-    default_args['image_dim'] = 256
-    default_args['raw_scale'] = 255.
-
-    def __init__(self, model_def_file, pretrained_model_file, mean_file,
-                 raw_scale, class_labels_file, bet_file, image_dim, gpu_mode):
-        logging.info('Loading net and associated files...')
-        #print("MEAN: " + str(np.load(mean_file).mean(1).mean(1)))
-        #sys.exit()
-        if gpu_mode:
-            caffe.set_mode_gpu()
-        else:
-            caffe.set_mode_cpu()
-        self.net = caffe.Classifier(
-            model_def_file, pretrained_model_file,
-            image_dims=(image_dim, image_dim), raw_scale=raw_scale,
-            mean=np.load(mean_file).mean(1).mean(1), channel_swap=(2, 1, 0)
-        )
-
-        with open(class_labels_file) as f:
-            labels_df = pd.DataFrame([
-                {
-                    'synset_id': l.strip().split(' ')[0],
-                    'name': ' '.join(l.strip().split(' ')[1:]).split(',')[0]
-                }
-                for l in f.readlines()
-            ])
-        self.labels = labels_df.sort('synset_id')['name'].values
-
-        self.bet = cPickle.load(open(bet_file))
-        # A bias to prefer children nodes in single-chain paths
-        # I am setting the value to 0.1 as a quick, simple model.
-        # We could use better psychological models here...
-        self.bet['infogain'] -= np.array(self.bet['preferences']) * 0.1
-
-    def classify(self, image):
-        try:
-            print("starting")
-            starttime = time.time()
-            scores = self.net.predict([image], oversample=True).flatten()
-            #print(scores)
-            endtime = time.time()
-            print("prediction done")
-
-            #indices = (-scores).argsort()[:15]
-            indices = (-scores).argsort()
-            predictions = self.labels[indices]
-            print("woo here we go")
-            # In addition to the prediction text, we will also produce
-            # the length for the progress bar visualization.
-            meta = [
-                (p, '%.5f' % scores[i])
-                for i, p in zip(indices, predictions)
-            ]
-            print("done meta")
-            bet_result = []
-            #if(False):
-            logging.info('result: %s', str(meta))
-            print("calculating gain")
-            # Compute expected information gain
-
-            #expected_infogain = np.dot(self.bet['probmat'], scores[self.bet['idmapping']])
-            #expected_infogain *= self.bet['infogain']
-
-            print("done, sorting scores")
-            # sort the scores
-            #infogain_sort = expected_infogain.argsort()[::-1]
-            #bet_result = [(self.bet['words'][v], '%.5f' % expected_infogain[v])
-            #              for v in infogain_sort[:10]]
-            #bet_result = []
-            #logging.info('bet result: %s', str(bet_result))
-            print("done")
-
-            return (True, meta, bet_result, '%.3f' % (endtime - starttime))
-
-        except Exception as err:
-            print(err)
-            return (False, 'Something went wrong when classifying the '
-                           'image. Maybe try another one?')
 
 
 
@@ -180,8 +45,8 @@ if __name__ == '__main__':
     query.query_type = 0
     query.objecttypes=['unknown']
     response = soma_query_service(query)
-    rospy.wait_for_service('/object_interestingness_estimator/estimate',10)
-    interest_srv = rospy.ServiceProxy('/object_interestingness_estimator/estimate',EstimateInterest)
+    #rospy.wait_for_service('/object_interestingness_estimator/estimate',10)
+    #interest_srv = rospy.ServiceProxy('/object_interestingness_estimator/estimate',EstimateInterest)
     bridge = CvBridge()
     #CNNWrapper.default_args.update({'gpu_mode': True})
     #c = CNNWrapper(**CNNWrapper.default_args)
