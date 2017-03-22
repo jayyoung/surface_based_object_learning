@@ -166,7 +166,7 @@ class SegmentedScene:
         self.scene_id = str(uuid.uuid4())
         self.clean_setup = False
         self.num_segments = len(indices)
-
+        self.surf_filter = cv2.SURF(1000)]
         self.transformation_store = tf.TransformerROS()
         for transform in observation_data['tf'].transforms:
             self.transformation_store.setTransform(transform)
@@ -277,9 +277,6 @@ class SegmentedScene:
 
 
             for points in cur_segment.data:
-
-
-
 
                 # store the roxe world transformed point too
                 pt_s = PointStamped()
@@ -482,6 +479,14 @@ class SegmentedScene:
 
 
             cur_segment.cv_rgb_image_cropped = cv_rgb_image[int(y_start):int(y_end), int(x_start):int(x_end)]
+            kp, des = self.surf_filter.detectAndCompute(cur_segment.cv_rgb_image_cropped,None)
+            print("kp:" + str(len(kp)))
+            if(len(kp) < 20):
+                rospy.loginfo("Object fell afoul of interest filter -- probably junk! SKIPPING!")
+                continue
+
+
+
             cur_segment.cv_depth_image_cropped = cv_depth_image[int(y_start):int(y_end), int(x_start):int(x_end)]
 
             cur_segment.cropped_depth_image = bridge.cv2_to_imgmsg(cur_segment.cv_depth_image_cropped)

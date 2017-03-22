@@ -19,16 +19,16 @@ import sys
 #from object_interestingness_estimator.srv import *
 import caffe
 import scipy.misc
-from PIL import Image
+#from PIL import Image
 import numpy as np
-import pandas as pd
+#import pandas as pd
 import cPickle
-import logging
+#import logging
 import base64
 import datetime, time
 import sys
 import numpy as np
-import cv2
+#import cv2
 
 
 
