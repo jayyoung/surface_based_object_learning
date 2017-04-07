@@ -29,7 +29,8 @@ from surface_based_object_learning.srv import *
 from util import TransformationStore
 
 # soma stuff
-from soma_msgs.msg import SOMAObject
+from soma_msgs.msg import *
+from soma_manager.msg import *
 from soma_manager.srv import *
 from soma_llsd.srv import *
 
@@ -100,7 +101,15 @@ class LearningCore:
 
         self.scene_publisher = rospy.Publisher('/surface_based_object_learning/scenes', std_msgs.msg.String, queue_size=10)
         self.data_dump_publisher = rospy.Publisher('/surface_based_object_learning/data_dumps', std_msgs.msg.String, queue_size=10)
-
+        self.obj_discovery_publisher = rospy.Publisher("/surface_based_object_learning/object_discovery",SOMANewObjects,queue_size=10)
+        test = SOMANewObjects()
+        test.ids.append("ping")
+        self.obj_discovery_publisher.publish(test)
+        rospy.sleep(1)
+        self.obj_discovery_publisher.publish(test)
+        rospy.sleep(1)
+        self.obj_discovery_publisher.publish(test)
+        
         self.clean_up_obs()
 
         rospy.loginfo("LEARNING CORE: -- node setup completed --")
@@ -315,8 +324,11 @@ class LearningCore:
 
             if(self.queued_soma_objs):
                 rospy.loginfo("-- inserting " + str(len(self.queued_soma_objs)) + " objects into soma")
+                ms = SOMANewObjects()
                 for k in self.queued_soma_objs:
                     print(k.id)
+                    ms.ids.append(k.id)
+                self.obj_discovery_publisher.publish(ms)
                 res = self.soma_insert(self.queued_soma_objs)
                 print(res)
 

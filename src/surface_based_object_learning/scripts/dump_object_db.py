@@ -41,6 +41,7 @@ if __name__ == '__main__':
     soma_query_service = rospy.ServiceProxy('/soma/query_objects',SOMAQueryObjs)
     segment_query_service = rospy.ServiceProxy('/soma_llsd/get_segment',GetSegment)
     scene_query_service = rospy.ServiceProxy('/soma_llsd/get_scene',GetScene)
+    print("got soma services")
     query = SOMAQueryObjsRequest()
     query.query_type = 0
     query.objecttypes=['unknown']
