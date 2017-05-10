@@ -42,6 +42,7 @@ class ROIFilter:
 
     def get_closest_roi_to_robot_cb(self, req):
         rospy.loginfo("got robot roi req")
+        rospy.loginfo("pose req: " + str(req.pose))
         p = self.get_closest_roi_to_robot(req.pose)
         return GetROIClosestToRobotResponse(p)
 
@@ -55,7 +56,7 @@ class ROIFilter:
 
     def gather_rois(self,filter_point=None):
         rospy.loginfo("Gathering ROIs")
-	rospy.loginfo("Filter point is:" + str(filter_point))
+        rospy.loginfo("Filter point is:" + str(filter_point))
         query = SOMAQueryROIsRequest()
         query.returnmostrecent = True
         response = self.soma_query(query)
@@ -70,14 +71,11 @@ class ROIFilter:
 		#rospy.loginfo(roi)
             if(roi.id not in visited_ids and "activity" not in roi.config and "Common" in roi.type):
                 visited_ids.append(roi.id)
-                rospy.loginfo(roi.type)
-                rospy.loginfo(roi.config)
-
+                #rospy.loginfo(roi.type)
+                #rospy.loginfo(roi.config)
                 points = roi.posearray.poses
-
-                print("found roi type:" + roi.type)
-
-                print(roi.type)
+                #print("found roi type:" + roi.type)
+                #print(roi.type)
                 points_2d = []
 
                 for point in points:
@@ -88,8 +86,8 @@ class ROIFilter:
                     continue
 
                 polygon = Polygon(points_2d)
-                print(polygon)
-		polygon.soma_id = roi.id
+                #print(polygon)
+                polygon.soma_id = roi.id
                 self.soma_polygons.append(polygon)
         rospy.loginfo("located: " + str(len(self.soma_polygons)) + " rois")
 

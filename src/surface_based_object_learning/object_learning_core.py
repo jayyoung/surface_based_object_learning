@@ -109,13 +109,13 @@ class LearningCore:
         self.obj_discovery_publisher.publish(test)
         rospy.sleep(1)
         self.obj_discovery_publisher.publish(test)
-        
+
         self.clean_up_obs()
 
         rospy.loginfo("LEARNING CORE: -- node setup completed --")
         self.setup_clean = True
 
-        #rospy.spin()
+        rospy.spin()
     def begin_spinning(self):
         rospy.spin()
 

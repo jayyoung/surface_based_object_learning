@@ -17,7 +17,7 @@ if __name__ == '__main__':
     rospy.init_node('om_test', anonymous = False)
     print("connecting")
     scene_count = 0
-    scene_limit = 5
+    scene_limit = 500
     client = MongoClient()
     client = MongoClient('localhost', 62345)
     targets = []
@@ -44,15 +44,20 @@ if __name__ == '__main__':
         for sc in scenes:
             cur_scene = sc
             if(hasattr(cur_scene,'meta_data')):
-                md = eval(cur_scene.meta_data)
-                if "surface" in md['source']:
-                    print("processing: " + cur_scene.id)
-                    if not os.path.exists(targ+cur_scene.episode_id+"/"):
-                        os.makedirs(targ+cur_scene.episode_id+"/")
-                    if(cur_scene.episode_id not in processed_episodes):
-                        processed_episodes.append(cur_scene.episode_id)
-                    scene_count+=1
-                    pickle.dump(cur_scene,open(targ+cur_scene.episode_id+"/"+cur_scene.id+".p",'wb'))
+                #    md = eval(cur_scene.meta_data)
+                #    if "surface" in md['source']:
+                print("processing: " + cur_scene.id)
+                if not os.path.exists(targ+cur_scene.waypoint+"/"+cur_scene.episode_id+"/"):
+                    os.makedirs(targ+cur_scene.waypoint+"/"+cur_scene.episode_id+"/")
+                ##if(cur_scene.episode_id not in processed_episodes):
+                #    processed_episodes.append(cur_scene.episode_id)
+                #scene_count+=1
+                cvi = bridge.imgmsg_to_cv2(cur_scene.rgb_img)
+                rgb = cv2.cvtColor(cvi, cv2.COLOR_BGR2RGB)
+                cv2.imwrite(targ+cur_scene.waypoint+"/"+cur_scene.episode_id+"/"+cur_scene.id+".png",rgb)
+                if not os.path.exists(targ+cur_scene.episode_id+"/"):
+                    os.makedirs(targ+cur_scene.episode_id+"/")
+                pickle.dump(cur_scene,open(targ+cur_scene.episode_id+"/"+cur_scene.id+".p",'wb'))
         if(scene_count > scene_limit):
             print("limit reached, breaking")
             break

@@ -162,6 +162,7 @@ class SegmentedScene:
 
     def __init__(self,indices,working_cloud,observation_data,roi_filter,offline_data=None):
         self.set_frames(working_cloud)
+        self.do_surf_filter = False
         self.unfiltered_cloud = observation_data['scene_cloud']
         self.scene_id = str(uuid.uuid4())
         self.clean_setup = False
@@ -229,15 +230,16 @@ class SegmentedScene:
             map_points_data = []
             image_mask = np.zeros(cv_rgb_image.shape,np.uint8)
 
+
+
+
+            rospy.loginfo("--- segment ----")
             rospy.loginfo("CLUSTER SIZE: " + str(len(root_segment.data)))
-            if(len(root_segment.data) >= 200 and len(root_segment.data) < 15000):
+            if(len(root_segment.data) >= 150 and len(root_segment.data) < 95000):
                 rospy.loginfo("cluster looks like the right size")
             else:
                 rospy.loginfo("cluster not the right size")
                 continue
-
-            rospy.loginfo("--- segment ----")
-
             cur_segment = SegmentedCluster(root_segment.data)
 
             for idx in root_segment.data:
@@ -479,11 +481,13 @@ class SegmentedScene:
 
 
             cur_segment.cv_rgb_image_cropped = cv_rgb_image[int(y_start):int(y_end), int(x_start):int(x_end)]
-            kp, des = self.surf_filter.detectAndCompute(cur_segment.cv_rgb_image_cropped,None)
-            print("kp:" + str(len(kp)))
-            if(len(kp) < 20):
-                rospy.loginfo("Object fell afoul of interest filter -- probably junk! SKIPPING!")
-                continue
+
+            if(self.do_surf_filter):
+                kp, des = self.surf_filter.detectAndCompute(cur_segment.cv_rgb_image_cropped,None)
+                print("kp:" + str(len(kp)))
+                if(len(kp) < 20):
+                    rospy.loginfo("Object fell afoul of interest filter -- probably junk! SKIPPING!")
+                    continue
 
 
 
@@ -605,7 +609,7 @@ class SegmentProcessor:
     def segment_scene(self,input_cloud,robot_pos=None,tf=None):
         rospy.wait_for_service('/get_closest_roi_to_robot',10)
         roicl = rospy.ServiceProxy('/get_closest_roi_to_robot',GetROIClosestToRobot)
-        rospy.loginfo("asdasdas")
+        #rospy.loginfo("asdasdas")
 
         if(robot_pos is None):
             rospy.loginfo("-- Getting Robot Position")
