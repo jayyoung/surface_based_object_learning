@@ -147,6 +147,7 @@ class SegmentedScene:
             points_out.append([p_out[0],p_out[1],p_out[2],p_in[3]])
 
         res = pc2.create_cloud(cloud.header, cloud.fields, points_out)
+        rospy.loginfo("done")
         return res
 
     def set_frames(self,cloud):
@@ -161,11 +162,12 @@ class SegmentedScene:
 
     def __init__(self,indices,working_cloud,observation_data,roi_filter,offline_data=None):
         self.set_frames(working_cloud)
+        self.do_surf_filter = False
         self.unfiltered_cloud = observation_data['scene_cloud']
         self.scene_id = str(uuid.uuid4())
         self.clean_setup = False
         self.num_segments = len(indices)
-
+        self.surf_filter = cv2.SURF(1000)
         self.transformation_store = tf.TransformerROS()
         for transform in observation_data['tf'].transforms:
             self.transformation_store.setTransform(transform)
@@ -208,7 +210,7 @@ class SegmentedScene:
         self.to_map_rot = rotation
 
         bridge = CvBridge()
-        cv_rgb_image = bridge.imgmsg_to_cv2(scene_rgb_img)
+        cv_rgb_image = bridge.imgmsg_to_cv2(scene_rgb_img,"bgr8")
         cv_depth_image = bridge.imgmsg_to_cv2(scene_depth_img)
 
         #print("writing cur scene")
@@ -228,14 +230,16 @@ class SegmentedScene:
             map_points_data = []
             image_mask = np.zeros(cv_rgb_image.shape,np.uint8)
 
-            if(len(root_segment.data) > 500 and len(root_segment.data) < 5000):
+
+
+
+            rospy.loginfo("--- segment ----")
+            rospy.loginfo("CLUSTER SIZE: " + str(len(root_segment.data)))
+            if(len(root_segment.data) >= 150 and len(root_segment.data) < 95000):
                 rospy.loginfo("cluster looks like the right size")
             else:
                 rospy.loginfo("cluster not the right size")
                 continue
-
-            rospy.loginfo("--- segment ----")
-
             cur_segment = SegmentedCluster(root_segment.data)
 
             for idx in root_segment.data:
@@ -275,9 +279,6 @@ class SegmentedScene:
 
 
             for points in cur_segment.data:
-
-
-
 
                 # store the roxe world transformed point too
                 pt_s = PointStamped()
@@ -419,6 +420,7 @@ class SegmentedScene:
             header_map.stamp = rospy.Time.now()
             header_map.frame_id = 'map'
             cur_segment.segmented_pc_mapframe = pc2.create_cloud(header_map, to_map.fields, map_points_data)
+            rospy.loginfo("segment has: " + str(len(map_points_data)) + " points")
 
             rospy.loginfo("map centroid:" + str(cur_segment.map_centroid))
 
@@ -453,7 +455,7 @@ class SegmentedScene:
             #if(bbox_width > b_h):
             #    b_h = bbox_width
 
-            padding = 32
+            padding = 48
 
             cur_segment.cv_rgb_image_cropped_unpadded = cv_rgb_image[int(rgb_min_y):int(rgb_max_y), int(rgb_min_x):int(rgb_max_x)]
 
@@ -479,6 +481,16 @@ class SegmentedScene:
 
 
             cur_segment.cv_rgb_image_cropped = cv_rgb_image[int(y_start):int(y_end), int(x_start):int(x_end)]
+
+            if(self.do_surf_filter):
+                kp, des = self.surf_filter.detectAndCompute(cur_segment.cv_rgb_image_cropped,None)
+                print("kp:" + str(len(kp)))
+                if(len(kp) < 20):
+                    rospy.loginfo("Object fell afoul of interest filter -- probably junk! SKIPPING!")
+                    continue
+
+
+
             cur_segment.cv_depth_image_cropped = cv_depth_image[int(y_start):int(y_end), int(x_start):int(x_end)]
 
             cur_segment.cropped_depth_image = bridge.cv2_to_imgmsg(cur_segment.cv_depth_image_cropped)
@@ -594,16 +606,27 @@ class SegmentProcessor:
         self.prev_scene = None
         self.root_scene = None
 
-    def segment_scene(self,input_cloud,robot_pos=None):
+    def segment_scene(self,input_cloud,robot_pos=None,tf=None):
+        rospy.wait_for_service('/get_closest_roi_to_robot',10)
+        roicl = rospy.ServiceProxy('/get_closest_roi_to_robot',GetROIClosestToRobot)
+        #rospy.loginfo("asdasdas")
 
         if(robot_pos is None):
-            rospy.wait_for_service('/get_closest_roi_to_robot',10)
-            roicl = rospy.ServiceProxy('/get_closest_roi_to_robot',GetROIClosestToRobot)
+            rospy.loginfo("-- Getting Robot Position")
             rp = rospy.wait_for_message("/robot_pose",Pose,10)
-            roip = roicl(pose=rp.position)
-            robot_pos = roip.output
+        else:
+            rp = robot_pos
+            rospy.loginfo("Republishing TF data")
+            rospy.loginfo("going")
+            pub = rospy.Publisher('/tf', tf2_msgs.msg.TFMessage,queue_size=10)
+            rospy.loginfo("done setup, publishing")
+            pub.publish(tf)
+            rospy.loginfo("Done!")
 
 
+        roip = roicl(pose=rp.position)
+        robot_pos = roip.output
+        rospy.loginfo("Segmenting")
         output = self.segmentation_service(cloud=input_cloud,posearray=robot_pos)
         return output
 
@@ -614,9 +637,17 @@ class SegmentProcessor:
         rospy.loginfo("segmenting (may take a second)")
 
         robot_pos = None
+        tf = None
         if(offline_data is not None):
             robot_pos = offline_data['robot_pose']
-        segment_response = self.segment_scene(observation_data['scene_cloud'],robot_pos)
+            pose = geometry_msgs.msg.Pose()
+            pose.position = robot_pos
+            robot_pos = pose.position
+            rospy.loginfo("Using offline data, robot pos:"+str(pose.position.position))
+            tf = offline_data['tf']
+        segment_response = self.segment_scene(observation_data['scene_cloud'],robot_pos,tf)
+        if(segment_response.clusters_indices is None):
+            rospy.logerr("No indices in segmented point cloud. Quitting processing this view.")
 
         # this might be different to what is in the raw observation message
         # as we may do things like cut it off after a certain distance etc.
@@ -661,7 +692,7 @@ if __name__ == '__main__':
 
     cur_observation_data = {}
     cur_observation_data['rgb_image'] = rospy.wait_for_message("/head_xtion/rgb/image_rect_color", Image, timeout=10.0)
-    cur_observation_data['depth_image'] = rospy.wait_for_message("/head_xtion/depth/image_rect", Image, timeout=10.0)
+    cur_observation_data['depth_image'] = rospy.wait_for_message("/head_xtion/depth/image", Image, timeout=10.0)
     cur_observation_data['camera_info'] = rospy.wait_for_message("/head_xtion/depth/camera_info", CameraInfo, timeout=10.0)
     cur_observation_data['scene_cloud'] = rospy.wait_for_message("/head_xtion/depth_registered/points",PointCloud2,timeout=10.0)
     cur_observation_data['waypoint'] = "MY HOUSE"

@@ -12,7 +12,7 @@ import json
 # view store STUFF
 from mongodb_store.message_store import MessageStoreProxy
 from soma_llsd_msgs.msg import Segment,Observation,Scene
-
+from cv_bridge import CvBridge, CvBridgeError
 # ROS stuff
 from sensor_msgs.msg import PointCloud2, PointField
 from segment_processing import SegmentProcessor
@@ -23,13 +23,14 @@ from std_srvs.srv import Trigger, TriggerResponse
 from geometry_msgs.msg import Pose,Point,Quaternion
 import tf2_ros
 import tf, tf2_msgs.msg
-
+import os
 # WS stuff
 from surface_based_object_learning.srv import *
 from util import TransformationStore
 
 # soma stuff
-from soma_msgs.msg import SOMAObject
+from soma_msgs.msg import *
+from soma_manager.msg import *
 from soma_manager.srv import *
 from soma_llsd.srv import *
 
@@ -41,11 +42,16 @@ import uuid
 
 class LearningCore:
 
+<<<<<<< HEAD
     def __init__(self,db_hostname,db_port,pc,depth,rgb,tf,pose,cam):
+=======
+    def __init__(self,db_hostname,db_port,data_dump_dir,roi_tag):
+>>>>>>> 9b77a45441870251438b20b6dbbcb8352e813c2f
         rospy.init_node('surface_based_object_learning', anonymous = False)
         self.setup_clean = False
         rospy.loginfo("LEARNING CORE: Manager Online")
         # make a segment tracker
+<<<<<<< HEAD
         rospy.loginfo("LEARNING CORE: setting up topics as provided")
 
         self.pointcloud_topic = pc
@@ -55,6 +61,10 @@ class LearningCore:
         self.pose = pose_topic
         self.cam = cam
 
+=======
+        rospy.loginfo("LEARNING CORE: looking for camera info topic")
+        self.data_dump_dir = data_dump_dir
+>>>>>>> 9b77a45441870251438b20b6dbbcb8352e813c2f
         self.segment_processor = SegmentProcessor()
         self.pending_obs = []
         self.cur_sequence_obj_ids = []
@@ -63,6 +73,7 @@ class LearningCore:
         self.queued_soma_objs = []
         self.cur_scene_list = []
         self.just_data_collection = False
+        self.cv_bridge = CvBridge()
 
         rospy.loginfo("LEARNING CORE: setting up services")
         process = rospy.Service('/surface_based_object_learning/process_scene',ProcessScene,self.process_scene_callback)
@@ -104,13 +115,22 @@ class LearningCore:
         self.append_obs_to_segment = rospy.ServiceProxy('/soma_llsd/add_observations_to_segment',AddObservationsToSegment)
 
         self.scene_publisher = rospy.Publisher('/surface_based_object_learning/scenes', std_msgs.msg.String, queue_size=10)
+        self.data_dump_publisher = rospy.Publisher('/surface_based_object_learning/data_dumps', std_msgs.msg.String, queue_size=10)
+        self.obj_discovery_publisher = rospy.Publisher("/surface_based_object_learning/object_discovery",SOMANewObjects,queue_size=10)
+        test = SOMANewObjects()
+        test.ids.append("ping")
+        self.obj_discovery_publisher.publish(test)
+        rospy.sleep(1)
+        self.obj_discovery_publisher.publish(test)
+        rospy.sleep(1)
+        self.obj_discovery_publisher.publish(test)
 
         self.clean_up_obs()
 
         rospy.loginfo("LEARNING CORE: -- node setup completed --")
         self.setup_clean = True
 
-        #rospy.spin()
+        rospy.spin()
     def begin_spinning(self):
         rospy.spin()
 
@@ -151,6 +171,7 @@ class LearningCore:
 
     def register_with_view_store(self,cloud,extra_data=None):
         try:
+            # used in the case of offline data
             if(self.cur_observation_data is None):
                 self.populate_observation_data(cloud,extra_data)
 
@@ -170,12 +191,48 @@ class LearningCore:
                 rospy.loginfo("LEARNING CORE: successfully added scene to view store")
                 self.cur_scene_id = scene.response.id
                 self.cur_scene_list.append(self.cur_scene_id)
+
+                rospy.loginfo("-- Writing Scene to HDD --")
+
+
+                if(self.just_data_collection):
+                    out_dir = self.data_dump_dir+"dynamic/episodes/"+self.cur_episode_id+"/"
+                else:
+                    out_dir = self.data_dump_dir+"surface/episodes/"+self.cur_episode_id+"/"
+
+                if(os.path.exists(os.path.expanduser(out_dir))):
+                    rospy.loginfo("\t Re-using episode dir")
+                else:
+                    rospy.loginfo("\t Creating episode dir")
+                    os.makedirs(os.path.expanduser(out_dir))
+
+                rospy.loginfo("\t Writing")
+                img = self.cv_bridge.imgmsg_to_cv2(self.cur_observation_data['rgb_image'])
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+                cv2.imwrite(os.path.expanduser(out_dir)+self.cur_scene_id+".png",img)
+                data_file = os.path.expanduser(out_dir)+"data.txt"
+                if(os.path.isfile(os.path.expanduser(data_file))):
+                    rospy.loginfo("\t Data already written")
+                else:
+                    rospy.loginfo("\t Writing data")
+                    with open(data_file,"a+") as f:
+                        f.write(str(self.cur_observation_data['waypoint'])+"\n")
+                        f.write(str(self.cur_observation_data['timestamp'])+"\n")
+                        f.write(str(self.cur_observation_data['metadata'])+"\n")
+
+
             else:
                 rospy.logerr("couldn't add scene to view store, this is catastrophic")
 
+
+
+
+            return True
         except Exception,e:
             rospy.loginfo(e)
             rospy.loginfo("LEARNING CORE: failed to add view to view store")
+            return False
 
 
     def process_scene(self,cloud,waypoint,extra_data=None):
@@ -183,13 +240,16 @@ class LearningCore:
             rospy.loginfo("LEARNING CORE: ---- Storing view in View Store ----")
             self.cur_waypoint = waypoint
             self.populate_observation_data(cloud,extra_data)
-            self.register_with_view_store(cloud)
+            success = self.register_with_view_store(cloud)
+            if not success:
+                rospy.logerr("Data collection failed for some reason. See above.")
+                return ProcessSceneResponse(False,self.cur_view_soma_ids)
 
             # if we're just doing data collection, no need to do any more processing
             if(self.just_data_collection is True):
                 rospy.loginfo("In data collection mode, so not doing any more processing.")
                 return ProcessSceneResponse(True,self.cur_view_soma_ids)
-                return
+                #return
 
 
             rospy.loginfo("LEARNING CORE: ---- Segmenting Scene ----")
@@ -215,10 +275,12 @@ class LearningCore:
             else:
                 rospy.loginfo("LEARNING CORE: Error in processing scene")
         except Exception,e:
-            rospy.logerr("Unable to segment and process this scene")
+            rospy.logerr("Unable to segment and process this scene -- see the issues above. This may be fine")
             rospy.logerr(e)
+            return ProcessSceneResponse(False,self.cur_view_soma_ids)
 
     def process_scene_callback(self, req):
+        rospy.loginfo("-- Received instruction to process a scene")
         result = ProcessSceneResponse(False,self.cur_view_soma_ids)
         if(self.setup_clean is False):
             rospy.logerr("-- surface_based_object_learning node is missing one or more key services, cannot act --")
@@ -258,8 +320,11 @@ class LearningCore:
 
             if(self.queued_soma_objs):
                 rospy.loginfo("-- inserting " + str(len(self.queued_soma_objs)) + " objects into soma")
+                ms = SOMANewObjects()
                 for k in self.queued_soma_objs:
                     print(k.id)
+                    ms.ids.append(k.id)
+                self.obj_discovery_publisher.publish(ms)
                 res = self.soma_insert(self.queued_soma_objs)
                 print(res)
 
@@ -280,9 +345,26 @@ class LearningCore:
 
                 observations = segment.response.observations
                 rospy.loginfo("LEARNING CORE: observations for " + str(object_id) + " = " + str(len(observations)))
-                if(len(observations) >= 2):
-                    rospy.loginfo("LEARNING CORE: processing...")
+                for o in observations:
+                    out_dir = self.data_dump_dir+"surface/episodes/"+self.cur_episode_id+"/objects/"+object_id+"/"
+                    img = o.rgb_cropped
+
+                    if(os.path.exists(os.path.expanduser(out_dir))):
+                        rospy.loginfo("\t reusing obj dir")
+                    else:
+                        rospy.loginfo("\t Creating obj dir")
+                        os.makedirs(os.path.expanduser(out_dir))
+
+                    img = self.cv_bridge.imgmsg_to_cv2(img)
+                    rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    outfile = os.path.expanduser(out_dir)+str(observations.index(o))+".png"
+                    rospy.loginfo("logging to: " + str(outfile))
+                    cv2.imwrite(outfile,rgb_img)
+
+            #    if(len(observations) >= 2):
+           #         rospy.loginfo("LEARNING CORE: processing...")
                     # update world model
+<<<<<<< HEAD
                     try:
                         rospy.loginfo("LEARNING CORE: updating world model")
                         #merged_cloud = self.view_alignment_manager.register_views(segment.response.observations)
@@ -296,6 +378,21 @@ class LearningCore:
                         continue
                 else:
                     rospy.loginfo("LEARNING CORE: not running view alignment, only one view")
+=======
+          #          try:
+         #               rospy.loginfo("LEARNING CORE: updating world model")
+        #                merged_cloud = self.view_alignment_manager.register_views(segment.response.observations)
+       #                 rospy.loginfo("LEARNING CORE: updating SOMA obj")
+      #                  soma_object.objects[0].cloud = merged_cloud
+
+     #                   self.soma_update(object=soma_object.objects[0],db_id=str(object_id))
+    #                except Exception,e:
+   #                     rospy.logerr("problem updating object models in world/SOMA db. Unable to register merged clouds")
+  #                      rospy.logerr(e)
+ #                       continue
+#                else:
+ #                   rospy.loginfo("LEARNING CORE: not running view alignment, only one view")
+>>>>>>> 9b77a45441870251438b20b6dbbcb8352e813c2f
 
                 #rospy.loginfo("LEARNING CORE: attempting to update object's recognition label")
                 #try:
@@ -371,6 +468,7 @@ class LearningCore:
             except rospy.ROSException, e:
                 rospy.logwarn("Failed to get some observation data")
                 rospy.logwarn(e)
+                return None
         else:
                 rospy.loginfo("LEARNING CORE: *** Making observation using historic robot data")
                 self.cur_observation_data['rgb_image'] = extra_data['rgb_image']
@@ -543,12 +641,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='world_state_manager.py')
     parser.add_argument("db_hostname", nargs=1, help='DB Hostname')
     parser.add_argument('db_port', nargs=1, help="DB Port")
+<<<<<<< HEAD
     parser.add_argument("pointcloud_topic", nargs=1, help='PC TOpic')
     parser.add_argument('rgb_topic', nargs=1, help="RGB Image Topic")
     parser.add_argument("depth_topic", nargs=1, help='Depth Image Topic')
     parser.add_argument('tf_topic', nargs=1, help="TF Topic")
     parser.add_argument('pose_topic', nargs=1, help="Robot Pose Topic")
     parser.add_argument('camera_info_topic', nargs=1, help="Camera Info Topic")
+=======
+    parser.add_argument("rgb_dump_dir", nargs=1, help='RGB HDD save location')
+    parser.add_argument('surface_roi_tag', nargs=1, help="Tag for filtering SOMa ROIs")
+>>>>>>> 9b77a45441870251438b20b6dbbcb8352e813c2f
 
     args = parser.parse_args(rospy.myargv(argv=sys.argv)[1:])
 
@@ -557,6 +660,8 @@ if __name__ == '__main__':
     else:
         hostname = str(vars(args)['db_hostname'][0])
         port = str(vars(args)['db_port'][0])
+        datadir = str(vars(args)['rgb_dump_dir'][0])
+        roitag = str(vars(args)['surface_roi_tag'][0])
 
         pc = str(vars(args)['pointcloud_topic'][0])
         depth = str(vars(args)['depth_topic'][0])
@@ -566,5 +671,9 @@ if __name__ == '__main__':
         cam = str(vars(args)['camera_info_topic'][0])
 
         rospy.loginfo("LEARNING CORE: got db_hostname as: " + hostname + " got db_port as: " + port)
+<<<<<<< HEAD
         core = LearningCore(hostname,port,pc,depth,rgb,tf,pose,cam)
+=======
+        core = LearningCore(hostname,port,datadir,roitag)
+>>>>>>> 9b77a45441870251438b20b6dbbcb8352e813c2f
         core.begin_spinning()

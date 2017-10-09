@@ -42,6 +42,7 @@ class ROIFilter:
 
     def get_closest_roi_to_robot_cb(self, req):
         rospy.loginfo("got robot roi req")
+        rospy.loginfo("pose req: " + str(req.pose))
         p = self.get_closest_roi_to_robot(req.pose)
         return GetROIClosestToRobotResponse(p)
 
@@ -55,6 +56,7 @@ class ROIFilter:
 
     def gather_rois(self,filter_point=None):
         rospy.loginfo("Gathering ROIs")
+        rospy.loginfo("Filter point is:" + str(filter_point))
         query = SOMAQueryROIsRequest()
         query.returnmostrecent = True
         response = self.soma_query(query)
@@ -66,27 +68,14 @@ class ROIFilter:
         visited_ids = []
         #rospy.loginfo("ROI TYPES: ")
         for roi in response.rois:
-            if(roi.id not in visited_ids):
+		#rospy.loginfo(roi)
+            if(roi.id not in visited_ids and "activity" not in roi.config and "Common" in roi.type):
                 visited_ids.append(roi.id)
                 #rospy.loginfo(roi.type)
-                if("NavArea" in roi.type):
-                #rospy.loginfo(roi.type+" \t SKIPPING")
-                    continue
-                if("Human" in roi.type):
-                #rospy.loginfo(roi.type+" \t SKIPPING")
-                    continue
-
-                if("Robot" in roi.type):
-                    continue
-
-                if("Atrium" in roi.type):
-                    continue
-
+                #rospy.loginfo(roi.config)
                 points = roi.posearray.poses
-
-                print("found roi type:" + roi.type)
-
-                print(roi.type)
+                #print("found roi type:" + roi.type)
+                #print(roi.type)
                 points_2d = []
 
                 for point in points:
@@ -97,17 +86,22 @@ class ROIFilter:
                     continue
 
                 polygon = Polygon(points_2d)
-                print(polygon)
+                #print(polygon)
+                polygon.soma_id = roi.id
                 self.soma_polygons.append(polygon)
+        rospy.loginfo("located: " + str(len(self.soma_polygons)) + " rois")
 
         if(filter_point is not None):
             filter_point = shapely.geometry.Point(filter_point.x,filter_point.y)
-            rospy.loginfo("filtering by pose")
+            rospy.loginfo("filtering by pose: " + str(filter_point))
             filtered_polygons = []
             b_d = 900000
             p_d = 900000
             best_p = None
             for p in self.soma_polygons:
+                #if(filter_point.within(p)):
+                #    print("contains filter point, ignoring")
+                #    continue
                 ds = p.centroid.distance(filter_point)
                 if(ds < p_d):
                     p_d = ds
@@ -121,6 +115,7 @@ class ROIFilter:
         rospy.loginfo("executing robot roi req")
         self.gather_rois(filter_point)
         poly = self.soma_polygons[0]
+        rospy.loginfo("ROI closest to robot is: " + str(poly.soma_id))
         pa = geometry_msgs.msg.PoseArray()
         min_x = poly.bounds[0]
         min_y = poly.bounds[1]
@@ -170,8 +165,13 @@ class ROIFilter:
     def ros_point_set_in_roi(self,point_in,filter_point):
         # allows the system to deal with changes made to ROIs online
         # and avoid having to be reloaded
+	if(filter_point is not None):
+		if(filter_point.x < -9000.0):
+			rospy.loginfo("Ignoring Filter Point")
+			filter_point = None
         self.gather_rois(filter_point)
         output = []
+	in_roi = 0
         for p in point_in:
             point = shapely.geometry.Point(p.x,p.y)
             for poly in self.soma_polygons:
@@ -180,6 +180,7 @@ class ROIFilter:
                 else:
                     output.append(False)
         print("done, processed " + str(len(point_in)) + " points")
+	print("of which " + str(sum(output)) + " were in the roi")
         return output
 
     def point_in_roi(self,point_in):
@@ -289,10 +290,9 @@ if __name__ == '__main__':
     rospy.init_node('test_roi_filter_', anonymous = True)
     rospy.loginfo("loading ROI Filter")
     r = ROIFilter()
-    print("getting pose closest to robot")
-    pose = rospy.wait_for_message("/robot_pose", geometry_msgs.msg.Pose, timeout=10.0)
-    print("position:")
-    print(pose)
-    roi = r.get_closest_roi_to_robot(pose.position)
-    print("done")
-    print(roi)
+    print("getting pose")
+    rp = rospy.wait_for_message("/robot_pose",Pose,10)
+#    print("got pose")
+ #   print(rp)
+    clr = r.get_closest_roi_to_robot(rp.position)
+    print(clr)
