@@ -21,12 +21,12 @@ def reset_gaze():
 
 def look_at_table():
     rospy.loginfo("Trying to look at table")
-    ptuClient = actionlib.SimpleActionClient('SetPTUState',flir_pantilt_d46.msg.PtuGotoAction)
+    ptuClient = actionlib.SimpleActionClient('SetPTUState',scitos_ptu.msg.PtuGotoAction)
     ptuClient.wait_for_server()
 
-    goal = flir_pantilt_d46.msg.PtuGotoGoal()
-    goal.tilt = 15 # 30 seems best
-    goal.tilt_vel = 5
+    goal = scitos_ptu.msg.PtuGotoGoal()
+    goal.tilt = 21 # 30 seems best
+    goal.pan = -22
     ptuClient.send_goal(goal)
     ptuClient.wait_for_result()
 

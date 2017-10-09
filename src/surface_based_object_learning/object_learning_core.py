@@ -41,12 +41,19 @@ import uuid
 
 class LearningCore:
 
-    def __init__(self,db_hostname,db_port):
+    def __init__(self,db_hostname,db_port,pc,depth,rgb,tf,pose,cam):
         rospy.init_node('surface_based_object_learning', anonymous = False)
         self.setup_clean = False
         rospy.loginfo("LEARNING CORE: Manager Online")
         # make a segment tracker
-        rospy.loginfo("LEARNING CORE: looking for camera info topic")
+        rospy.loginfo("LEARNING CORE: setting up topics as provided")
+
+        self.pointcloud_topic = pc
+        self.depth_topic = depth
+        self.rgb_topic = rgb
+        self.tf_topic = tf
+        self.pose = pose_topic
+        self.cam = cam
 
         self.segment_processor = SegmentProcessor()
         self.pending_obs = []
@@ -80,9 +87,8 @@ class LearningCore:
         rospy.loginfo("LEARNING CORE: done")
         self.soma_update = rospy.ServiceProxy('soma/update_object',SOMAUpdateObject)
 
-
-        rospy.loginfo("LEARNING CORE: setting up view alignment manager")
-        self.view_alignment_manager = ViewAlignmentManager()
+    #    rospy.loginfo("LEARNING CORE: setting up view alignment manager")
+    #    self.view_alignment_manager = ViewAlignmentManager()
 
         rospy.loginfo("LEARNING CORE: getting LLSD services")
         rospy.wait_for_service('/soma_llsd/insert_scene')
@@ -138,25 +144,6 @@ class LearningCore:
         self.do_postprocessing()
         self.clean_up_obs()
         return TriggerResponse(True,"Observations Ending: Assuming all previous observations were from the same sequence.")
-
-    def get_camera_info_topic(self):
-        camera_msg = None
-        try:
-            camera_msg = rospy.wait_for_message("/head_xtion/depth_registered/sw_registered/camera_info",  CameraInfo, timeout=2)
-            return "/head_xtion/depth_registered/sw_registered/camera_info"
-        except Exception,e:
-            rospy.loginfo("LEARNING CORE: couldn't find /head_xtion/depth_registered/sw_registered/camera_info")
-
-        if(not camera_msg):
-            try:
-                camera_msg = rospy.wait_for_message("/head_xtion/depth_registered/camera_info",  CameraInfo, timeout=2)
-                rospy.loginfo("LEARNING CORE: found /head_xtion/depth_registered/camera_info")
-                return "/head_xtion/depth_registered/camera_info"
-            except Exception,e:
-                rospy.loginfo("LEARNING CORE: couldn't find /head_xtion/depth_registered/camera_info")
-
-        return None
-
 
     def flush_observation(self,data):
         print("-- flushing observation from dataset through system --")
@@ -298,9 +285,9 @@ class LearningCore:
                     # update world model
                     try:
                         rospy.loginfo("LEARNING CORE: updating world model")
-                        merged_cloud = self.view_alignment_manager.register_views(segment.response.observations)
+                        #merged_cloud = self.view_alignment_manager.register_views(segment.response.observations)
                         rospy.loginfo("LEARNING CORE: updating SOMA obj")
-                        soma_object.objects[0].cloud = merged_cloud
+                        soma_object.objects[0].cloud = segment.response.observations[0]
 
                         self.soma_update(object=soma_object.objects[0],db_id=str(object_id))
                     except Exception,e:
@@ -351,9 +338,8 @@ class LearningCore:
         if(extra_data is None):
             rospy.loginfo("LEARNING CORE: *** Making observation using live robot data")
             try:
-                self.camera_info_topic = self.get_camera_info_topic()
-                self.cur_observation_data['rgb_image'] = rospy.wait_for_message("/head_xtion/rgb/image_color", Image, timeout=10.0)
-                self.cur_observation_data['depth_image'] = rospy.wait_for_message("/head_xtion/depth/image", Image, timeout=10.0)
+                self.cur_observation_data['rgb_image'] = rospy.wait_for_message(self.rgb_image_topic, Image, timeout=10.0)
+                self.cur_observation_data['depth_image'] = rospy.wait_for_message(self.depth_image_topic, Image, timeout=10.0)
                 self.cur_observation_data['camera_info'] = rospy.wait_for_message(self.camera_info_topic, CameraInfo, timeout=10.0)
                 self.cur_observation_data['scene_cloud'] = scene
                 self.cur_observation_data['waypoint'] = self.cur_waypoint
@@ -557,15 +543,28 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='world_state_manager.py')
     parser.add_argument("db_hostname", nargs=1, help='DB Hostname')
     parser.add_argument('db_port', nargs=1, help="DB Port")
+    parser.add_argument("pointcloud_topic", nargs=1, help='PC TOpic')
+    parser.add_argument('rgb_topic', nargs=1, help="RGB Image Topic")
+    parser.add_argument("depth_topic", nargs=1, help='Depth Image Topic')
+    parser.add_argument('tf_topic', nargs=1, help="TF Topic")
+    parser.add_argument('pose_topic', nargs=1, help="Robot Pose Topic")
+    parser.add_argument('camera_info_topic', nargs=1, help="Camera Info Topic")
 
     args = parser.parse_args(rospy.myargv(argv=sys.argv)[1:])
 
-    if(len(sys.argv) < 2):
-        rospy.loginfo("LEARNING CORE: not enough args, need db hostname and port")
+    if(len(sys.argv) < 8):
+        rospy.loginfo("LEARNING CORE: not enough args, need everything set!")
     else:
         hostname = str(vars(args)['db_hostname'][0])
         port = str(vars(args)['db_port'][0])
 
+        pc = str(vars(args)['pointcloud_topic'][0])
+        depth = str(vars(args)['depth_topic'][0])
+        rgb = str(vars(args)['rgb_topic'][0])
+        tf = str(vars(args)['tf_topic'][0])
+        pose = str(vars(args)['pose_topic'][0])
+        cam = str(vars(args)['camera_info_topic'][0])
+
         rospy.loginfo("LEARNING CORE: got db_hostname as: " + hostname + " got db_port as: " + port)
-        core = LearningCore(hostname,port)
+        core = LearningCore(hostname,port,pc,depth,rgb,tf,pose,cam)
         core.begin_spinning()
