@@ -3,7 +3,7 @@
 
 	<!-- SEGMENTATION -->
 	  <include file="$(find object_gestalt_segmentation)/launch/startup.launch"/>
-	  <include file="$(find bham_seg_filter)/launch/bham_seg_filter.launch"/>
+	  <include file="$(find seg_filter)/launch/seg_filter.launch"/>
 
 
 </launch>

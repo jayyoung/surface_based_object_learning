@@ -26,9 +26,9 @@ from roi_filter import ROIFilter
 from view_registration import ViewAlignmentManager
 #import python_pcd
 #import pcl
-#from bham_seg import Segmentation
+#from seg import Segmentation
 from util import TransformationStore
-from bham_seg_filter.srv import *
+from seg_filter.srv import *
 from surface_based_object_learning.srv import *
 
 class BBox():
@@ -478,7 +478,7 @@ class SegmentedScene:
                 x_start = 0
 
             do_luminance_filtering = False
-
+            cur_segment.padded_img_bbox = [int(x_start),int(y_start),int(x_end),int(y_end)]
 
             cur_segment.cv_rgb_image_cropped = cv_rgb_image[int(y_start):int(y_end), int(x_start):int(x_end)]
 
@@ -593,13 +593,14 @@ class SegmentProcessor:
     def __init__(self):
         #rospy.init_node('CT_TEST_NODE', anonymous = True)
         rospy.loginfo("--created segment tracker--")
-        self.seg_srv_topic = "/bham_filtered_segmentation/segment"
+        self.seg_srv_topic = "/filtered_segmentation/segment"
         self.cur_scene = None
         self.prev_scene = None
         self.root_scene = None
         self.roi_filter = ROIFilter()
-        self.view_alignment_manager = ViewAlignmentManager()
-        self.segmentation_service = rospy.ServiceProxy(self.seg_srv_topic, bham_seg, 10)
+        #self.view_alignment_manager = ViewAlignmentManager()
+        self.segmentation_service = rospy.ServiceProxy(self.seg_srv_topic, seg, 10)
+        rospy.loginfo("Segment Tracker Set up")
 
     def reset(self):
         self.cur_scene = None

@@ -1,15 +1,22 @@
 <launch>
-	<arg name="db_hostname" default="localhost" />
-	<arg name="db_port" default="62345" />
-
-
 	<arg name="pointcloud_topic" default="/head_xtion/depth_registered/points" />
-	<arg name="rgb_topic" default="/head_xtion/rgb/image_color" />
-	<arg name="depth_topic" default="/head_xtion/depth/image" />
+	<arg name="rgb_topic" default="/head_xtion/rgb/image_rect_color" />
+	<arg name="depth_topic" default="/head_xtion/depth/image_rect" />
 	<arg name="tf_topic" default="/tf" />
 	<arg name="pose_topic" default="/robot_pose" />
 	<arg name="camera_info_topic" default="/head_xtion/depth_registered/camera_info" />
 
+	<arg name="rgb_dump_dir" default="~/surface_based_object_learning_rgb_dump/" />
+	<arg name="surface_roi_tag" default="Common" />
 
-	<node name="object_learning_core" pkg="surface_based_object_learning" respawn="true" type="object_learning_core.py" args="$(arg db_hostname) $(arg db_port) $(arg pointcloud_topic) $(arg rgb_topic) $(arg depth_topic) $(arg tf_topic) $(arg pose_topic) $(arg camera_info_topic)" output="screen"/>
+	<node name="object_learning_core" pkg="surface_based_object_learning" respawn="true" type="object_learning_core.py" args="
+		$(arg surface_roi_tag)
+		$(arg rgb_dump_dir)
+		$(arg pointcloud_topic)
+		$(arg rgb_topic)
+	  $(arg depth_topic)
+		$(arg tf_topic)
+		$(arg pose_topic)
+		$(arg camera_info_topic)" output="screen"/>
+
 </launch>

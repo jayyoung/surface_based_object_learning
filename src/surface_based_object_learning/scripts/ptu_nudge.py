@@ -25,15 +25,10 @@ def look_at_table():
     ptuClient.wait_for_server()
 
     goal = scitos_ptu.msg.PtuGotoGoal()
-<<<<<<< HEAD
-    goal.tilt = 21 # 30 seems best
-    goal.pan = -22
-=======
-    goal.tilt = 28 # 30 seems best
-    goal.tilt_vel = 5
-    goal.pan = 9
-    goal.pan_vel = 5
->>>>>>> 9b77a45441870251438b20b6dbbcb8352e813c2f
+    goal.tilt = 25 # 30 seems best
+    goal.tilt_vel = 10
+    goal.pan = 0
+    goal.pan_vel = 0
     ptuClient.send_goal(goal)
     ptuClient.wait_for_result()
 
